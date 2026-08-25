@@ -1,0 +1,153 @@
+local Player = game.Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local RootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- Main handler function
+local function UniversalScript()
+    -- 1. Bypass checks (for local execution)
+    local function BypassChecks()
+        local gmt = getrawmetatable(game)
+        local old = gmt.__index
+        setreadonly(gmt, false)
+        gmt.__index = newcclosure(function(self, key)
+            if key == "IsA" or key == "FindFirstChild" then
+                return function(self, ...)
+                    return old(self, ...)
+                end
+            end
+            return old(self, key)
+        end)
+        setreadonly(gmt, true)
+    end
+    BypassChecks()
+
+    -- 2. Teleport (example: to map center)
+    local function TeleportTo(pos)
+        if RootPart and RootPart.Parent then
+            RootPart.CFrame = CFrame.new(pos)
+        end
+    end
+
+    -- 3. Infinite jump (toggle with F key)
+    local InfiniteJump = false
+    game:GetService("UserInputService").InputBegan:Connect(function(input, gpe)
+        if gpe then return end
+        if input.KeyCode == Enum.KeyCode.F then
+            InfiniteJump = not InfiniteJump
+            if InfiniteJump then
+                Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+                Humanoid.Jump = true
+                Humanoid:GetPropertyChangedSignal("Jump"):Connect(function()
+                    if InfiniteJump then Humanoid.Jump = true end
+                end)
+            end
+        end
+    end)
+
+    -- 4. Walk speed (modifiable)
+    local function SetSpeed(speed)
+        Humanoid.WalkSpeed = speed
+    end
+    SetSpeed(50) -- default 50
+
+    -- 5. ESP (display players via Boxes)
+    local function ESP()
+        for _, plr in pairs(game.Players:GetPlayers()) do
+            if plr ~= Player then
+                local char = plr.Character
+                if char and char:FindFirstChild("Head") then
+                    local box = Instance.new("BoxHandleAdornment")
+                    box.Size = Vector3.new(4, 5, 2)
+                    box.Adornee = char
+                    box.Color3 = Color3.new(1, 0, 0)
+                    box.Transparency = 0.5
+                    box.ZIndex = 0
+                    box.AlwaysOnTop = true
+                    box.Parent = char
+                end
+            end
+        end
+    end
+    ESP()
+
+    -- 6. Auto-farm (attack nearest mob)
+    local function AutoFarm()
+        while wait(0.1) do
+            local nearest = nil
+            local dist = math.huge
+            for _, v in pairs(game.Workspace:GetDescendants()) do
+                if v:IsA("Model") and v:FindFirstChild("Humanoid") and v:FindFirstChild("Head") then
+                    if v ~= Character and v.Humanoid.Health > 0 then
+                        local d = (RootPart.Position - v.Head.Position).Magnitude
+                        if d < dist and d < 50 then
+                            dist = d
+                            nearest = v
+                        end
+                    end
+                end
+            end
+            if nearest then
+                game:GetService("ReplicatedStorage").RemoteEvent:FireServer("Attack", nearest)
+            end
+        end
+    end
+    -- Uncomment if needed: AutoFarm()
+
+    -- 7. Grabber (collect all items in radius)
+    local function GrabItems()
+        for _, v in pairs(game.Workspace:GetDescendants()) do
+            if v:IsA("Part") and v:FindFirstChild("TouchInterest") and v.Parent:IsA("Tool") then
+                local dist = (RootPart.Position - v.Position).Magnitude
+                if dist < 20 then
+                    v.Parent.Handle.CFrame = RootPart.CFrame
+                end
+            end
+        end
+    end
+    -- Looped collection (every 2 sec)
+    spawn(function()
+        while wait(2) do
+            GrabItems()
+        end
+    end)
+
+    -- 8. Interface (simple GUI)
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Parent = Player.PlayerGui
+
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(0, 200, 0, 150)
+    Frame.Position = UDim2.new(0, 10, 0, 10)
+    Frame.BackgroundColor3 = Color3.new(0, 0, 0)
+    Frame.BackgroundTransparency = 0.3
+    Frame.Parent = ScreenGui
+
+    local SpeedLabel = Instance.new("TextLabel")
+    SpeedLabel.Size = UDim2.new(0, 180, 0, 30)
+    SpeedLabel.Position = UDim2.new(0, 10, 0, 10)
+    SpeedLabel.Text = "Speed: 50"
+    SpeedLabel.TextColor3 = Color3.new(1, 1, 1)
+    SpeedLabel.BackgroundTransparency = 1
+    SpeedLabel.Parent = Frame
+
+    local SpeedSlider = Instance.new("TextBox")
+    SpeedSlider.Size = UDim2.new(0, 180, 0, 30)
+    SpeedSlider.Position = UDim2.new(0, 10, 0, 50)
+    SpeedSlider.PlaceholderText = "enter speed"
+    SpeedSlider.Text = ""
+    SpeedSlider.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
+    SpeedSlider.TextColor3 = Color3.new(1, 1, 1)
+    SpeedSlider.Parent = Frame
+    SpeedSlider.FocusLost:Connect(function(enter)
+        if enter then
+            local num = tonumber(SpeedSlider.Text)
+            if num and num > 0 then
+                SetSpeed(num)
+                SpeedLabel.Text = "Speed: " .. num
+            end
+        end
+    end)
+
+    print("Universal script loaded. F - infinite jump.")
+end
